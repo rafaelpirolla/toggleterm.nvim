@@ -50,24 +50,6 @@ local function setup_global_mappings()
   end
 end
 
--- Creates a new terminal if none are present or closes terminals that are
--- currently opened, or opens terminals that were previously closed.
----@param size number?
----@param dir string?
----@param direction string?
----@param name string?
-local function smart_toggle(size, dir, direction, name)
-  local has_open, windows = ui.find_open_windows()
-  if not has_open then
-    if not ui.open_terminal_view(size, direction) then
-      local term_id = terms.get_toggled_id()
-      terms.get_or_create_term(term_id, dir, direction, name):open(size, direction)
-    end
-  else
-    ui.close_and_save_terminal_view(windows)
-  end
-end
-
 --- @param num number
 --- @param size number?
 --- @param dir string?
@@ -258,6 +240,8 @@ function M.send_lines_to_terminal(selection_type, trim_spaces, cmd_data)
   api.nvim_win_set_cursor(current_window, { start_line, start_col - 1 })
 end
 
+-- Creates a new terminal if none are present or closes terminals that are
+-- currently opened, or opens terminals that were previously closed.
 function M.toggle_command(args, count)
   local parsed = commandline.parse(args)
   vim.validate({
@@ -265,9 +249,50 @@ function M.toggle_command(args, count)
     dir = { parsed.dir, "string", true },
     direction = { parsed.direction, "string", true },
     name = { parsed.name, "string", true },
+    next = { parsed.next, "boolean", true },
   })
   if parsed.size then parsed.size = tonumber(parsed.size) end
-  M.toggle(count, parsed.size, parsed.dir, parsed.direction, parsed.name)
+
+  local next_focus_id = 0
+
+  if parsed.next then
+
+    local all_terms = terms.get_all()
+    local next_get_focus
+
+    -- pairs don't guarantee order so we'll maybe need another stucture using ipairs
+    for _, term in pairs(all_terms) do
+      if next_get_focus then
+        next_focus_id = term.id
+      end
+      if term:is_focused() and next_focus_id == 0 then
+        term:close()
+        next_get_focus = 1
+      end
+    end
+    if next_focus_id == 0 then
+      if #all_terms > 1 then
+        next_focus_id = 1
+      end
+    end
+    if count == 0 then
+      count = next_focus_id
+    end
+  end
+
+  if count and count > 0 then
+    toggle_nth_term(count, parsed.size, parsed.dir, parsed.direction, parsed.name)
+  else
+    local has_open, windows = ui.find_open_windows()
+    if not has_open then
+      if not ui.open_terminal_view(parsed.size, parsed.direction) then
+        local term_id = terms.get_toggled_id()
+        terms.get_or_create_term(term_id, parsed.dir, parsed.direction, parsed.name):open(parsed.size, parsed.direction)
+      end
+    else
+      ui.close_and_save_terminal_view(windows)
+    end
+  end
 end
 
 function _G.___toggleterm_winbar_click(id)
@@ -275,26 +300,6 @@ function _G.___toggleterm_winbar_click(id)
     local term = terms.get_or_create_term(id)
     if not term then return end
     term:toggle()
-  end
-end
-
---- If a count is provided we operate on the specific terminal buffer
---- i.e. 2ToggleTerm => open or close Term 2
---- if the count is 1 we use a heuristic which is as follows
---- if there is no open terminal window we toggle the first one i.e. assumed
---- to be the primary. However if several are open we close them.
---- this can be used with the count commands to allow specific operations
---- per term or mass actions
---- @param count number?
---- @param size number?
---- @param dir string?
---- @param direction string?
---- @param name string?
-function M.toggle(count, size, dir, direction, name)
-  if count and count >= 1 then
-    toggle_nth_term(count, size, dir, direction, name)
-  else
-    smart_toggle(size, dir, direction, name)
   end
 end
 

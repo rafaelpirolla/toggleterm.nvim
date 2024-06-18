@@ -18,6 +18,7 @@ local is_windows = vim.loop.os_uname().version:match("Windows")
 ---@field name string?
 ---@field go_back boolean?
 ---@field open boolean?
+---@field next boolean?
 
 ---Take a users command arguments in the format "cmd='git commit' dir=~/dotfiles"
 ---and parse this into a table of arguments
@@ -54,7 +55,7 @@ function M.parse(args)
         local key, value = arg[1], arg[2]
         if key == "size" then
           value = tonumber(value)
-        elseif key == "go_back" or key == "open" then
+        elseif key == "go_back" or key == "open" or key == "next" then
           value = value ~= "0"
         end
         result[key] = value
